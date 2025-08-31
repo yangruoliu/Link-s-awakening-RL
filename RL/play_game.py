@@ -1,9 +1,11 @@
 import io
-import keyboard
+#import keyboard
+import sys, select
+
 from pyboy import PyBoy
 import numpy as np
-pyboy = PyBoy("RL\game_state\Link's awakening.gb")
-save_file = "RL\game_state\Link's awakening.gb.state"
+pyboy = PyBoy("/home/crafter_zelda/Zelda-Link-s-awakening-agent/RL/game_state/Link's awakening.gb")
+save_file = "/home/crafter_zelda/Zelda-Link-s-awakening-agent/RL/game_state/Link's awakening.gb.state"
 
 try:
     with open(save_file, "rb") as f:
@@ -15,19 +17,23 @@ last_save_state = False
 
 for i in range(10000):
     pyboy.tick()
-    
-    if keyboard.is_pressed('x'):
-        if not last_save_state: 
-            with open(save_file, "wb") as f:
-                pyboy.save_state(f)
-            print(f"✅ 游戏状态已保存至 {save_file}")
-            last_save_state = True
-    else:
-        last_save_state = False
+    """
+    之前的方案keyboard在linux下不太好用，故用sys来实现
+    """
+    if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
+        key = sys.stdin.readline().strip()
+        if key == 'x':
+            if not last_save_state: 
+                with open(save_file, "wb") as f:
+                    pyboy.save_state(f)
+                print(f"✅ 游戏状态已保存至 {save_file}")
+                last_save_state = True
+    #if keyboard.is_pressed('x'):
+        
+            else:
+                last_save_state = False
 
     if (i%200 == 0):
-        #print(pyboy.memory[0xDB5A])
-        
         print("###############################")
         frame = pyboy.game_area()   # 或者 screen_image().convert('RGB') -> np.array
         #print(type(frame))       # 查看数据类型（应该是 numpy.ndarray）
@@ -38,7 +44,9 @@ for i in range(10000):
         #print(pyboy.game_area())
         #print(sprite)
         #print (pyboy.memory[0xDBAE])
-    if keyboard.is_pressed('q'):
-        break
+    if sys.stdin in select.select([sys.stdin], [], [], 0)[0]:
+        key = sys.stdin.readline().strip()
+        if key == 'q':
+            break
 
 pyboy.stop()
