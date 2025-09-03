@@ -146,3 +146,25 @@ class StepRenderCallback(BaseCallback):
         self.step_logs = []
         self.episode_idx += 1
 
+
+class LiveRenderCallback(BaseCallback):
+    """
+    Render the environment window every step for real-time visualization.
+    Uses env.render(mode="human") on the base env (first sub-env if vectorized).
+    """
+
+    def _on_step(self) -> bool:
+        try:
+            vec_env = getattr(self, "training_env", None) or self.model.get_env()
+            while hasattr(vec_env, "venv"):
+                vec_env = vec_env.venv
+            if hasattr(vec_env, "envs") and len(vec_env.envs) > 0:
+                base_env = vec_env.envs[0]
+                while hasattr(base_env, "env"):
+                    base_env = base_env.env
+                base_env.render(mode="human")
+            else:
+                vec_env.render(mode="human")
+        except Exception:
+            pass
+        return True
