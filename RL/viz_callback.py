@@ -44,16 +44,24 @@ class StepRenderCallback(BaseCallback):
         self.frames = []
 
     def _on_step(self) -> bool:
-        # Access the underlying env
-        env = self.model.get_env()
+        # Access and unwrap the underlying env to the base gym.Env for rendering
+        frame = None
         try:
-            # VecEnv -> capture first sub-env's render
-            if hasattr(env, "envs") and len(env.envs) > 0:
-                frame = env.envs[0].render(mode="rgb_array")
+            vec_env = getattr(self, "training_env", None) or self.model.get_env()
+            # Unwrap VecEnv wrappers (e.g., VecTransposeImage, VecNormalize)
+            while hasattr(vec_env, "venv"):
+                vec_env = vec_env.venv
+            # Now expect DummyVecEnv with .envs list
+            if hasattr(vec_env, "envs") and len(vec_env.envs) > 0:
+                base_env = vec_env.envs[0]
+                # Unwrap gym wrappers (e.g., Monitor, TimeLimit)
+                while hasattr(base_env, "env"):
+                    base_env = base_env.env
+                frame = base_env.render(mode="rgb_array")
             else:
-                frame = env.render(mode="rgb_array")
+                # Fallback
+                frame = vec_env.render(mode="rgb_array")
         except Exception:
-            # If env does not support rgb_array, skip
             frame = None
 
         if frame is not None:
@@ -101,9 +109,9 @@ class StepRenderCallback(BaseCallback):
         return True
 
     def _on_rollout_end(self) -> None:
-        # Episodes may span multiple rollouts; do nothing here unless user wants periodic dumps
-        if (self.episode_idx % self.save_every_n_episodes) == 0 and len(self.frames) > 0 and self.save_every_n_episodes < 0:
-            self._save_episode()
+        # If no episode boundary was detected but we collected frames, save a rollout clip
+        if len(self.frames) > 0:
+            self._save_episode(suffix="_rollout")
 
     def _on_training_end(self) -> None:
         # Flush any remaining frames as a final video

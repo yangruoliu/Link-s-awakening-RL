@@ -6,6 +6,7 @@ from env import Zelda_Env, game_file, save_file
 from viz_callback import StepRenderCallback
 
 import os
+from pathlib import Path
 """
 checkpoint_dir = "./checkpoints/"
 os.makedirs(checkpoint_dir, exist_ok=True)
@@ -52,7 +53,8 @@ model = PPO(
 )
 
 
-viz_cb = StepRenderCallback(output_dir="RL/videos", save_every_n_episodes=1, fps=15, verbose=1)
+output_dir = str((Path(__file__).parent / "videos").resolve())
+viz_cb = StepRenderCallback(output_dir=output_dir, save_every_n_episodes=1, fps=15, verbose=1)
 model.learn(total_timesteps=TOTAL_STEPS, progress_bar=True, callback=viz_cb)
 model.save("RL\RL_model\ppo_58_final")
 env.close()
