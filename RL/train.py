@@ -59,7 +59,7 @@ model = PPO(
 
 
 output_dir = str((Path(__file__).parent / "videos").resolve())
-viz_cb = StepRenderCallback(output_dir=output_dir, save_every_n_episodes=1, fps=15, verbose=1)
+viz_cb = StepRenderCallback(output_dir=output_dir, save_every_n_episodes=1, fps=15, flush_every_n_steps=1024, verbose=1)
 live_cb = LiveRenderCallback() if LiveRenderCallback is not None else None
 callbacks = CallbackList([cb for cb in [viz_cb, live_cb] if cb is not None])
 model.learn(total_timesteps=TOTAL_STEPS, progress_bar=True, callback=callbacks)

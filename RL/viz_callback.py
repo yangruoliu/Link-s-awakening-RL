@@ -21,6 +21,7 @@ class StepRenderCallback(BaseCallback):
         save_every_n_episodes: int = 1,
         max_frames_per_episode: Optional[int] = 2000,
         fps: int = 30,
+        flush_every_n_steps: Optional[int] = None,
         verbose: int = 0,
     ):
         super().__init__(verbose)
@@ -28,9 +29,11 @@ class StepRenderCallback(BaseCallback):
         self.save_every_n_episodes = save_every_n_episodes
         self.max_frames_per_episode = max_frames_per_episode
         self.fps = fps
+        self.flush_every_n_steps = flush_every_n_steps
         self.episode_idx = 0
         self.frames: List[np.ndarray] = []
         self.step_logs: List[dict] = []
+        self.global_step = 0
 
         os.makedirs(self.output_dir, exist_ok=True)
 
@@ -38,6 +41,7 @@ class StepRenderCallback(BaseCallback):
         self.episode_idx = 0
         self.frames = []
         self.step_logs = []
+        self.global_step = 0
 
     def _on_rollout_start(self) -> None:
         # Clear frames at the start of each rollout segment
@@ -57,7 +61,17 @@ class StepRenderCallback(BaseCallback):
                 # Unwrap gym wrappers (e.g., Monitor, TimeLimit)
                 while hasattr(base_env, "env"):
                     base_env = base_env.env
-                frame = base_env.render(mode="rgb_array")
+                frame = None
+                try:
+                    frame = base_env.render(mode="rgb_array")
+                except Exception:
+                    frame = None
+                # PyBoy fallback
+                if frame is None and hasattr(base_env, "pyboy"):
+                    try:
+                        frame = base_env.pyboy.screen.ndarray
+                    except Exception:
+                        frame = None
             else:
                 # Fallback
                 frame = vec_env.render(mode="rgb_array")
@@ -106,6 +120,11 @@ class StepRenderCallback(BaseCallback):
             done_flag = False
         if done_flag:
             self._save_episode()
+
+        # Step-based flush
+        self.global_step += 1
+        if self.flush_every_n_steps is not None and self.global_step % self.flush_every_n_steps == 0 and len(self.frames) > 0:
+            self._save_episode(suffix=f"_step{self.global_step}")
         return True
 
     def _on_rollout_end(self) -> None:
