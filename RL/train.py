@@ -4,20 +4,14 @@ from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
 from env import Zelda_Env, game_file, save_file
 
+# 指定训练显卡
 import os
-
-#checkpoint_dir = "./checkpoints/"
-#os.makedirs(checkpoint_dir, exist_ok=True)
-#checkpoint_callback = CheckpointCallback(
-   # save_freq=10_000,  # 每训练 10k 步保存一次模型
-    #save_path=checkpoint_dir,
-   # name_prefix="ppo_zelda"
-#)
+os.environ["CUDA_VISIBLE_DEVICES"] = "5,6,7"
 
 TOTAL_STEPS = 1000000
 
-save_file = "RL/game_state/Link's awakening.gb.state"
-game_file = "RL/game_state/Link's awakening.gb"
+save_file = "Zelda-Link-s-awakening-agent copy/RL/game_state/Room_51.state"
+game_file = "Zelda-Link-s-awakening-agent copy/RL/game_state/Link's awakening.gb"
 
 env = Zelda_Env(game_file=game_file, save_file=save_file)
 env = Monitor(env)
@@ -50,5 +44,5 @@ model = PPO(
 )
 
 model.learn(total_timesteps=TOTAL_STEPS, progress_bar=True)
-model.save("RL\RL_model\ppo_zelda_final")
+model.save("RL/RL_model/ppo_51_final")
 env.close()
