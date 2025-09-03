@@ -3,6 +3,7 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.callbacks import CheckpointCallback
 from stable_baselines3.common.monitor import Monitor
 from env import Zelda_Env, game_file, save_file
+from viz_callback import StepRenderCallback
 
 import os
 """
@@ -51,6 +52,7 @@ model = PPO(
 )
 
 
-model.learn(total_timesteps=TOTAL_STEPS, progress_bar=True)
+viz_cb = StepRenderCallback(output_dir="RL/videos", save_every_n_episodes=1, fps=15, verbose=1)
+model.learn(total_timesteps=TOTAL_STEPS, progress_bar=True, callback=viz_cb)
 model.save("RL\RL_model\ppo_58_final")
 env.close()

@@ -125,6 +125,14 @@ class Zelda_Env(gym.Env):
     def render(self, mode = "human"):
         if mode == "human":
             self.pyboy.render_screen()
+        elif mode == "rgb_array":
+            frame = self.pyboy.screen.ndarray
+            # 返回 (H, W, 3) 的 uint8 图像
+            if frame.ndim == 2:
+                frame = np.stack([frame, frame, frame], axis=-1)
+            elif frame.shape[-1] == 1:
+                frame = np.repeat(frame, 3, axis=-1)
+            return frame.astype(np.uint8)
     
     # 处理游戏screen，降低维度并且缩放至size大小，以备后续rl训练使用
     def preprocess_for_rl(self):
