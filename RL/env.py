@@ -43,6 +43,9 @@ class Zelda_Env(gym.Env):
         # XXX 新增房间目标完成检测
         self.cur_goal = False
         self.visited_rooms = set()
+        # 记录每回合在每个房间中访问过的网格（tile），用于探索奖励
+        self.visited_tiles = set()  # 元素形式：(room_id, tile_x, tile_y)
+        self.explore_bonus = 0.002  # 探索新网格的正向奖励规模
         #self.zelda = self.pyboy.game_wrapper
         # 设置不同房间的任务目标
         self.room_goals = {
@@ -110,6 +113,7 @@ class Zelda_Env(gym.Env):
         self.goal_room = self.read_m(0xDBAE)
         self.cur_room = self.goal_room
         self.visited_rooms = set()
+        self.visited_tiles = set()
 
         self.pre_health = self.read_m(0xDB5A)
         self.cur_health = self.pre_health
@@ -186,6 +190,17 @@ class Zelda_Env(gym.Env):
         x = sprite.x
         y = sprite.y
         return (x, y)
+
+    def _get_tile(self):
+        """将像素坐标粗略映射到 tile 网格坐标。GameBoy 典型 tile 为 8x8。"""
+        x, y = self._get_pos()
+        # 对异常/负值做保护
+        try:
+            tile_x = int(max(0, x) // 8)
+            tile_y = int(max(0, y) // 8)
+        except Exception:
+            tile_x, tile_y = 0, 0
+        return tile_x, tile_y
     
     def _reset_state(self):
         """检测角色目前的状态"""
@@ -366,6 +381,13 @@ class Zelda_Env(gym.Env):
                 reward -= 0.001
             else:
                 reward -= 0.0001 * self.get_distance()
+
+        # 探索奖励：首次踏入当前房间未访问过的 tile，给予微小正向奖励
+        tile_x, tile_y = self._get_tile()
+        tile_key = (int(self.cur_room), tile_x, tile_y)
+        if tile_key not in self.visited_tiles:
+            self.visited_tiles.add(tile_key)
+            reward += self.explore_bonus
 
         if self.outside():
             reward -= 0.1
