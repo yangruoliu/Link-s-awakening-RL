@@ -45,12 +45,81 @@ class Zelda_Env(gym.Env):
         self.visited_rooms = set()
         # 记录每回合在每个房间中访问过的网格（tile），用于探索奖励
         self.visited_tiles = set()  # 元素形式：(room_id, tile_x, tile_y)
-        self.explore_bonus = 0.002  # 探索新网格的正向奖励规模
+        self.explore_bonus = 0.002  # 探索新网格的正向奖励规模（默认，可被任务权重覆盖）
         # 子任务设置
         self.task_name = task_name  # 可选: 'get_key', 'reach_area', 'press_button', 'kill_enemy', 'explore_tiles'
         self.task_params = task_params or {}
         self.terminate_on_subtask = terminate_on_subtask
         self.task_dwell_steps = 0  # press_button 等任务用
+
+        # 任务奖励权重配置（可被 task_params['reward_weights'] 覆盖）
+        self.reward_profiles = {
+            "default": {
+                "death_penalty": 1.0,
+                "hurt_coef": 0.01,
+                "rupee_reward": 1.0,
+                "goal_reward": 10.0,
+                "room_penalty": 0.001,
+                "distance_coef": 0.0001,
+                "explore_bonus": 0.002,
+                "outside_penalty": 0.1,
+            },
+            # 强调拿钥匙与探索
+            "get_key": {
+                "death_penalty": 1.0,
+                "hurt_coef": 0.01,
+                "rupee_reward": 0.5,
+                "goal_reward": 0.0,
+                "room_penalty": 0.0005,
+                "distance_coef": 0.00005,
+                "explore_bonus": 0.003,
+                "outside_penalty": 0.1,
+            },
+            # 用卢比上涨近似击杀信号
+            "kill_enemy": {
+                "death_penalty": 1.0,
+                "hurt_coef": 0.01,
+                "rupee_reward": 2.0,
+                "goal_reward": 0.0,
+                "room_penalty": 0.0005,
+                "distance_coef": 0.0,
+                "explore_bonus": 0.001,
+                "outside_penalty": 0.1,
+            },
+            # 主要依靠子任务本身的区域塑形
+            "press_button": {
+                "death_penalty": 1.0,
+                "hurt_coef": 0.01,
+                "rupee_reward": 0.0,
+                "goal_reward": 0.0,
+                "room_penalty": 0.0005,
+                "distance_coef": 0.0,
+                "explore_bonus": 0.001,
+                "outside_penalty": 0.1,
+            },
+            # 主要依靠 reach_area 子任务塑形
+            "reach_area": {
+                "death_penalty": 1.0,
+                "hurt_coef": 0.01,
+                "rupee_reward": 0.0,
+                "goal_reward": 0.0,
+                "room_penalty": 0.0005,
+                "distance_coef": 0.0,
+                "explore_bonus": 0.001,
+                "outside_penalty": 0.1,
+            },
+            # 加强探索
+            "explore_tiles": {
+                "death_penalty": 1.0,
+                "hurt_coef": 0.01,
+                "rupee_reward": 0.0,
+                "goal_reward": 0.0,
+                "room_penalty": 0.0005,
+                "distance_coef": 0.0,
+                "explore_bonus": 0.004,
+                "outside_penalty": 0.1,
+            },
+        }
         #self.zelda = self.pyboy.game_wrapper
         # 设置不同房间的任务目标
         self.room_goals = {
@@ -377,35 +446,42 @@ class Zelda_Env(gym.Env):
 
     def calculate_reward(self):
         """计算当前的奖励函数"""
-        # TODO
+        # 选择奖励权重配置
+        profile_key = self.task_name if self.task_name in getattr(self, 'reward_profiles', {}) else 'default'
+        weights = getattr(self, 'reward_profiles', {}).get(profile_key, self.reward_profiles['default'])
+        # 允许通过 task_params 重写特定权重
+        rw_override = (self.task_params or {}).get('reward_weights', {}) if hasattr(self, 'task_params') else {}
+        if rw_override:
+            weights = {**weights, **rw_override}
+
         reward = 0
         done = False
         if self.is_dead():
-            reward += -1
+            reward -= float(weights.get('death_penalty', 1.0))
 
         #if self.is_hurt() != 0:
-        reward += 0.01 * self.is_hurt()
+        reward += float(weights.get('hurt_coef', 0.01)) * self.is_hurt()
 
         if self.calculate_rupees():
-            reward += 1
+            reward += float(weights.get('rupee_reward', 1.0))
 
         if self.check_goal():
-            reward += 10
+            reward += float(weights.get('goal_reward', 10.0))
         else:
             if self.cur_room != self.goal_room:
-                reward -= 0.001
+                reward -= float(weights.get('room_penalty', 0.001))
             else:
-                reward -= 0.0001 * self.get_distance()
+                reward -= float(weights.get('distance_coef', 0.0001)) * self.get_distance()
 
         # 探索奖励：首次踏入当前房间未访问过的 tile，给予微小正向奖励
         tile_x, tile_y = self._get_tile()
         tile_key = (int(self.cur_room), tile_x, tile_y)
         if tile_key not in self.visited_tiles:
             self.visited_tiles.add(tile_key)
-            reward += self.explore_bonus
+            reward += float(weights.get('explore_bonus', self.explore_bonus))
 
         if self.outside():
-            reward -= 0.1
+            reward -= float(weights.get('outside_penalty', 0.1))
             done = True
         # 子任务奖励叠加
         sub_reward, sub_done = self._compute_subtask_reward()
