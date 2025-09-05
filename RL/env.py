@@ -65,7 +65,7 @@ class Zelda_Env(gym.Env):
                 "hurt_coef": 0.01,
                 "rupee_reward": 1.0,
                 "goal_reward": 10.0,
-                "room_penalty": 0.001,
+                "room_penalty": 0.005,
                 "distance_coef": 0.0001,
                 "explore_bonus": 0.002,
                 "outside_penalty": 0.1,
