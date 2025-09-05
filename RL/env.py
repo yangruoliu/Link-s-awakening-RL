@@ -15,7 +15,7 @@ game_file = "RL\game_state\Link's awakening.gb"
 save_file = "RL\game_state\Room_51.state"
 
 class Zelda_Env(gym.Env):
-    def __init__(self, game_file, save_file):
+    def __init__(self, game_file, save_file, task_name=None, task_params=None, terminate_on_subtask=False):
 
         """初始化游戏环境"""
         super().__init__()
@@ -46,6 +46,11 @@ class Zelda_Env(gym.Env):
         # 记录每回合在每个房间中访问过的网格（tile），用于探索奖励
         self.visited_tiles = set()  # 元素形式：(room_id, tile_x, tile_y)
         self.explore_bonus = 0.002  # 探索新网格的正向奖励规模
+        # 子任务设置
+        self.task_name = task_name  # 可选: 'get_key', 'reach_area', 'press_button', 'kill_enemy', 'explore_tiles'
+        self.task_params = task_params or {}
+        self.terminate_on_subtask = terminate_on_subtask
+        self.task_dwell_steps = 0  # press_button 等任务用
         #self.zelda = self.pyboy.game_wrapper
         # 设置不同房间的任务目标
         self.room_goals = {
@@ -114,6 +119,15 @@ class Zelda_Env(gym.Env):
         self.cur_room = self.goal_room
         self.visited_rooms = set()
         self.visited_tiles = set()
+        self.task_dwell_steps = 0
+        # 允许通过 reset(options) 在每回合切换任务
+        if options is not None:
+            if 'task_name' in options:
+                self.task_name = options.get('task_name')
+            if 'task_params' in options:
+                self.task_params = options.get('task_params') or {}
+            if 'terminate_on_subtask' in options:
+                self.terminate_on_subtask = bool(options.get('terminate_on_subtask'))
 
         self.pre_health = self.read_m(0xDB5A)
         self.cur_health = self.pre_health
@@ -354,7 +368,8 @@ class Zelda_Env(gym.Env):
         return 0
     
     def calculate_rupees(self):
-        self.cur_rupee = self.read_m(0xDBAE)
+        # 正确的卢比计数地址为 0xDB5E
+        self.cur_rupee = self.read_m(0xDB5E)
         if self.cur_rupee > self.pre_rupee:
             self.pre_rupee = self.cur_rupee
             return True
@@ -392,4 +407,68 @@ class Zelda_Env(gym.Env):
         if self.outside():
             reward -= 0.1
             done = True
+        # 子任务奖励叠加
+        sub_reward, sub_done = self._compute_subtask_reward()
+        reward += sub_reward
+        if self.terminate_on_subtask and sub_done:
+            done = True
         return reward, done
+
+    def _compute_subtask_reward(self):
+        """根据当前激活的子任务给予奖励与结束信号。"""
+        if not self.task_name:
+            return 0.0, False
+
+        name = self.task_name
+        params = self.task_params or {}
+        sub_reward = 0.0
+        sub_done = False
+
+        # 1) 拿到钥匙
+        if name == 'get_key':
+            has_key = self.read_m(0xDBD0) >= int(params.get('min_keys', 1))
+            if has_key:
+                sub_reward += float(params.get('reward', 5.0))
+                sub_done = True
+
+        # 2) 探索指定覆盖率
+        elif name == 'explore_tiles':
+            target_tiles = int(params.get('target_tiles', 50))
+            if len(self.visited_tiles) >= target_tiles:
+                sub_reward += float(params.get('reward', 2.0))
+                sub_done = True
+
+        # 3) 接近/到达指定区域（像素坐标，曼哈顿距离）
+        elif name == 'reach_area':
+            target = params.get('target_xy', [34, 45])
+            radius = float(params.get('radius', 6.0))
+            tx, ty = int(target[0]), int(target[1])
+            x, y = self._get_pos()
+            dist = abs(tx - x) + abs(ty - y)
+            sub_reward += -0.0001 * dist  # shaping
+            if dist <= radius:
+                sub_reward += float(params.get('reward', 2.0))
+                sub_done = True
+
+        # 4) 按压地板按钮（用区域停留近似）
+        elif name == 'press_button':
+            area = params.get('area_xyxy', [28, 36, 40, 48])  # [x1,y1,x2,y2]
+            dwell = int(params.get('dwell_steps', 20))
+            x, y = self._get_pos()
+            x1, y1, x2, y2 = area
+            if x1 <= x <= x2 and y1 <= y <= y2:
+                self.task_dwell_steps += 1
+                sub_reward += 0.0005
+                if self.task_dwell_steps >= dwell:
+                    sub_reward += float(params.get('reward', 3.0))
+                    sub_done = True
+            else:
+                self.task_dwell_steps = 0
+
+        # 5) 击杀敌人（用卢比上涨作为近似信号）
+        elif name == 'kill_enemy':
+            if self.calculate_rupees():
+                sub_reward += float(params.get('reward', 3.0))
+                sub_done = True
+
+        return sub_reward, sub_done

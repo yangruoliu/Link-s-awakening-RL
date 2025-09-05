@@ -27,7 +27,13 @@ TOTAL_STEPS = 1000000
 save_file = "RL\game_state\Room_58.state"
 game_file = "RL\game_state\Link's awakening.gb"
 
-env = Zelda_Env(game_file=game_file, save_file=save_file)
+# 可在此切换子任务:
+# None / 'get_key' / 'reach_area' / 'press_button' / 'kill_enemy' / 'explore_tiles'
+TASK_NAME = None
+TASK_PARAMS = {}
+TERMINATE_ON_SUBTASK = False
+
+env = Zelda_Env(game_file=game_file, save_file=save_file, task_name=TASK_NAME, task_params=TASK_PARAMS, terminate_on_subtask=TERMINATE_ON_SUBTASK)
 env = Monitor(env)
 
 """
