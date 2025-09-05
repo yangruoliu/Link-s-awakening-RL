@@ -65,7 +65,7 @@ class Zelda_Env(gym.Env):
                 "hurt_coef": 0.01,
                 "rupee_reward": 1.0,
                 "goal_reward": 10.0,
-                "room_penalty": 0.005,
+                "room_penalty": 0.02,
                 "distance_coef": 0.0001,
                 "explore_bonus": 0.002,
                 "get_key_reward": 20.0,
@@ -522,12 +522,13 @@ class Zelda_Env(gym.Env):
             else:
                 reward -= float(weights.get('distance_coef', 0.0001)) * self.get_distance()
 
-        # 探索奖励：首次踏入当前房间未访问过的 tile，给予微小正向奖励
-        tile_x, tile_y = self._get_tile()
-        tile_key = (int(self.cur_room), tile_x, tile_y)
-        if tile_key not in self.visited_tiles:
-            self.visited_tiles.add(tile_key)
-            reward += float(weights.get('explore_bonus', self.explore_bonus))
+        # 探索奖励：仅在目标房间内给予微小奖励，避免外房间刷分
+        if int(self.cur_room) == int(self.goal_room):
+            tile_x, tile_y = self._get_tile()
+            tile_key = (int(self.cur_room), tile_x, tile_y)
+            if tile_key not in self.visited_tiles:
+                self.visited_tiles.add(tile_key)
+                reward += float(weights.get('explore_bonus', self.explore_bonus))
 
         # 踩下按钮（近似）
         if not self.button_pressed and self.detect_button_press():
