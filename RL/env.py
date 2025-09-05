@@ -35,6 +35,9 @@ class Zelda_Env(gym.Env):
         # XXX 似乎可以通过持有的卢比数目来判断是否击杀怪物
         self.pre_rupee = self.read_m(0xDB5E)
         self.cur_rupee = self.read_m(0xDB5E)
+        # 钥匙数量（背包内钥匙计数）
+        self.pre_keys = self.read_m(0xDBD0)
+        self.cur_keys = self.pre_keys
 
         # 当前所处的迷宫房间号
         self.goal_room = self.read_m(0xDBAE)
@@ -46,6 +49,9 @@ class Zelda_Env(gym.Env):
         # 记录每回合在每个房间中访问过的网格（tile），用于探索奖励
         self.visited_tiles = set()  # 元素形式：(room_id, tile_x, tile_y)
         self.explore_bonus = 0.002  # 探索新网格的正向奖励规模（默认，可被任务权重覆盖）
+        # 按钮检测辅助：在区域内连续停留若干步视为按下
+        self.button_dwell = 0
+        self.button_pressed = False
         # 子任务设置
         self.task_name = task_name  # 可选: 'get_key', 'reach_area', 'press_button', 'kill_enemy', 'explore_tiles'
         self.task_params = task_params or {}
@@ -127,6 +133,11 @@ class Zelda_Env(gym.Env):
             58: "kill enemy and get key", # 迷宫入口左侧房间，有两个乌龟怪物
             51: "kill turtle,push button and open box" # 有一个凹型陷阱，需要绕过陷阱并且击败怪物
         }
+        # 房间内按钮区域近似（像素坐标）: room_id -> [x1, y1, x2, y2], dwell_steps
+        self.button_area_map = {
+            51: {"area": [28, 36, 40, 48], "dwell": 20},
+            58: {"area": [30, 40, 44, 56], "dwell": 15},
+        }
 
         """动作空间设定"""
         # 定义动作空间和观察空间
@@ -188,6 +199,8 @@ class Zelda_Env(gym.Env):
         self.cur_room = self.goal_room
         self.visited_rooms = set()
         self.visited_tiles = set()
+        self.button_dwell = 0
+        self.button_pressed = False
         self.task_dwell_steps = 0
         # 允许通过 reset(options) 在每回合切换任务
         if options is not None:
@@ -200,6 +213,9 @@ class Zelda_Env(gym.Env):
 
         self.pre_health = self.read_m(0xDB5A)
         self.cur_health = self.pre_health
+        # 重置键值计数
+        self.pre_keys = self.read_m(0xDBD0)
+        self.cur_keys = self.pre_keys
 
         #self.goal_room = self.read_m(0xDBAE)
         #self.cur_room = self.read_m(0xDBAE)
@@ -444,9 +460,35 @@ class Zelda_Env(gym.Env):
             return True
         return False
 
+    def calculate_keys(self):
+        """检测是否新获得钥匙，0xDBD0 背包钥匙计数。"""
+        self.cur_keys = self.read_m(0xDBD0)
+        if self.cur_keys > self.pre_keys:
+            self.pre_keys = self.cur_keys
+            return True
+        return False
+
+    def detect_button_press(self):
+        """近似按钮踩下：位于按钮区域并连续驻留若干步。"""
+        cfg = self.button_area_map.get(int(self.goal_room)) or self.button_area_map.get(int(self.cur_room))
+        if not cfg:
+            self.button_dwell = 0
+            return False
+        x1, y1, x2, y2 = cfg.get("area", [0, 0, -1, -1])
+        dwell_need = int(cfg.get("dwell", 20))
+        x, y = self._get_pos()
+        if x1 <= x <= x2 and y1 <= y <= y2:
+            self.button_dwell += 1
+            if self.button_dwell >= dwell_need:
+                self.button_pressed = True
+                return True
+        else:
+            self.button_dwell = 0
+        return False
+
     def calculate_reward(self):
         """计算当前的奖励函数"""
-        # 选择奖励权重配置
+        # 选择奖励权重配置（不拆任务，仅用作加权）
         profile_key = self.task_name if self.task_name in getattr(self, 'reward_profiles', {}) else 'default'
         weights = getattr(self, 'reward_profiles', {}).get(profile_key, self.reward_profiles['default'])
         # 允许通过 task_params 重写特定权重
@@ -462,8 +504,12 @@ class Zelda_Env(gym.Env):
         #if self.is_hurt() != 0:
         reward += float(weights.get('hurt_coef', 0.01)) * self.is_hurt()
 
+        # 击败敌人（近似）：卢比增长
         if self.calculate_rupees():
             reward += float(weights.get('rupee_reward', 1.0))
+        # 拿到钥匙
+        if self.calculate_keys():
+            reward += float(weights.get('get_key_reward', 5.0))
 
         if self.check_goal():
             reward += float(weights.get('goal_reward', 10.0))
@@ -479,6 +525,10 @@ class Zelda_Env(gym.Env):
         if tile_key not in self.visited_tiles:
             self.visited_tiles.add(tile_key)
             reward += float(weights.get('explore_bonus', self.explore_bonus))
+
+        # 踩下按钮（近似）
+        if not self.button_pressed and self.detect_button_press():
+            reward += float(weights.get('press_button_reward', 3.0))
 
         if self.outside():
             reward -= float(weights.get('outside_penalty', 0.1))
