@@ -68,6 +68,8 @@ class Zelda_Env(gym.Env):
                 "room_penalty": 0.005,
                 "distance_coef": 0.0001,
                 "explore_bonus": 0.002,
+                "get_key_reward": 20.0,
+                "press_button_reward": 3.0,
                 "outside_penalty": 0.1,
             },
             # 强调拿钥匙与探索
@@ -507,9 +509,10 @@ class Zelda_Env(gym.Env):
         # 击败敌人（近似）：卢比增长
         if self.calculate_rupees():
             reward += float(weights.get('rupee_reward', 1.0))
-        # 拿到钥匙
+        # 拿到钥匙：给予最高奖励，并判为任务成功（终止本回合）
         if self.calculate_keys():
-            reward += float(weights.get('get_key_reward', 5.0))
+            reward += float(weights.get('get_key_reward', 20.0))
+            done = True
 
         if self.check_goal():
             reward += float(weights.get('goal_reward', 10.0))
