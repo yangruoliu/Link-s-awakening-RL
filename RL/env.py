@@ -6,8 +6,10 @@ from gymnasium import Env, spaces
 from pyboy.utils import WindowEvent
 from skimage.transform import downscale_local_mean
 
+
 save_file = "/home/crafter_zelda/agent_tiny/RL/game_state/Room_51_saved_no_enemy.state"
 game_file = "/home/crafter_zelda/agent_tiny/RL/game_state/Link's awakening.gb"
+
 
 
 TOTAL_STEPS = 1000000

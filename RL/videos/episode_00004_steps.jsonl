@@ -111,6 +111,7 @@
 {"action": 2, "reward": -0.5, "room": 59, "goal": false}
 {"action": 3, "reward": -0.5, "room": 59, "goal": false}
 {"action": 5, "reward": -0.5, "room": 59, "goal": false}
+<<<<<<< HEAD
 {"action": 1, "reward": -0.5, "room": 59, "goal": false}
 {"action": 0, "reward": -0.5, "room": 59, "goal": false}
 {"action": 0, "reward": -0.5, "room": 59, "goal": false}
@@ -171,3 +172,7 @@
 {"action": 1, "reward": -0.5, "room": 59, "goal": false}
 {"action": 4, "reward": -0.5, "room": 59, "goal": false}
 {"action": 1, "reward": -0.6000000238418579, "room": 59, "goal": false}
+=======
+{"action": 5, "reward": -0.5, "room": 59, "goal": false}
+{"action": 3, "reward": -0.6000000238418579, "room": 59, "goal": false}
+>>>>>>> origin/visualize

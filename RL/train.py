@@ -17,8 +17,10 @@ os.environ["CUDA_VISIBLE_DEVICES"] = "5,6,7"
 
 TOTAL_STEPS = 1000000
 
+
 save_file = "/home/crafter_zelda/agent_tiny/RL/game_state/Room_51_saved_no_enemy.state"
 game_file = "/home/crafter_zelda/agent_tiny/RL/game_state/Link's awakening.gb"
+
 
 # 可在此切换子任务:
 # None / 'get_key' / 'reach_area' / 'press_button' / 'kill_enemy' / 'explore_tiles'
@@ -45,6 +47,7 @@ TERMINATE_ON_SUBTASK = False
 env = Zelda_Env(game_file=game_file, save_file=save_file,task_name=TASK_NAME,
     task_params=TASK_PARAMS,
     terminate_on_subtask=TERMINATE_ON_SUBTASK)
+
 env = Monitor(env)
 
 """
@@ -79,5 +82,7 @@ viz_cb = StepRenderCallback(output_dir=output_dir, save_every_n_episodes=1, fps=
 live_cb = LiveRenderCallback() if LiveRenderCallback is not None else None
 callbacks = CallbackList([cb for cb in [viz_cb, live_cb] if cb is not None])
 model.learn(total_timesteps=TOTAL_STEPS, progress_bar=True, callback=callbacks)
+
 model.save("RL/RL_model/ppo_51_noenemy_final")
+
 env.close()

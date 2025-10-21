@@ -1,0 +1,10 @@
+# Python 缓存
+__pycache__/
+*.pyc
+
+# Stable Baselines 3 日志和视频
+ppo_zelda_tensorboard/
+videos/
+
+# macOS
+.DS_Store
